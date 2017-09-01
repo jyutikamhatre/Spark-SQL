@@ -1,0 +1,327 @@
+Stock Market Analysis - NSE India 
+
+https://www.kaggle.com/ramamet4/nse-company-stocks
+NSE India stocks(compaines)
+Intraday datasets ( 2015-2016)
+
+//define case class
+
+ case class NSECompanies(
+     code : String,
+     date : String,
+     time : String,
+     open : Double,
+     high : Double,
+     low : Double,
+     close : Double,
+     volume : Int)
+
+//read text file and create dataframe from it
+
+val NSECompaniesDF = sc.textFile("sparksqlNSE/nseData").map(rec => {
+val r = rec.split(",")
+NSECompanies(r(1),r(2),r(3),r(4).toDouble,r(5).toDouble,r(6).toDouble,r(7).toDouble,r(8).toInt)}).toDF
+
+NSECompaniesDF: org.apache.spark.sql.DataFrame = [code: string, date: string, time: string, open: double, high: double, low: double, close: double, volume: int]
+
+//show first 5 records
+
+NSECompaniesDF.take(5).foreach(println)
+["3IINFOTECH",20150703,"09:16:00",4.55,4.55,4.55,4.55,835]
+["3IINFOTECH",20150703,"09:17:00",4.55,4.55,4.55,4.55,390]
+["3IINFOTECH",20150703,"09:18:00",4.55,4.55,4.55,4.55,1000]
+["3IINFOTECH",20150703,"09:19:00",4.55,4.55,4.55,4.55,1150]
+["3IINFOTECH",20150703,"09:20:00",4.55,4.55,4.55,4.55,1100]
+
+//1) compute the average closing price per day per company( using dataframe api )
+
+val avgClosingPrice = NSECompaniesDF.select("code","date","close").groupBy("code","date").agg(avg("close")).orderBy(asc("date"))
+avgClosingPrice: org.apache.spark.sql.DataFrame = [code: string, date: string, avg(close): double]
+
+//display output
+
+avgClosingPrice.show()
++------------+--------+------------------+                                      
+|        code|    date|        avg(close)|
++------------+--------+------------------+
+|"ABBOTINDIA"|20141226|3496.2481132075477|
+|"ADANIPORTS"|20141230| 315.8806451612904|
+|"ADANIPORTS"|20141231|313.47105263157897|
+|   "8KMILES"|20150116| 713.9608974358973|
+|"AMARAJABAT"|20150407| 850.2901685393257|
+|"ABBOTINDIA"|20150618| 3852.401515151515|
+|"ABBOTINDIA"|20150619| 3875.130303030303|
+|"3IINFOTECH"|20150703|  4.54999999999999|
+|"3IINFOTECH"|20150706| 4.356875000000004|
++------------+--------+------------------+
+
+
+//2) list the companies with highest closing prices ( using dataframe api)
+
+val highestClosing = NSECompaniesDF.select("code","close").groupBy("code").agg(max("close")).orderBy(desc("code"))
+highestClosing: org.apache.spark.sql.DataFrame = [code: string, max(close): double]
+
+//display output
+highestClosing.show()
++------------+----------+                                                       
+|        code|max(close)|
++------------+----------+
+|"AMARAJABAT"|    852.45|
+|"ADANIPORTS"|     317.0|
+|"ABBOTINDIA"|    3890.0|
+|   "8KMILES"|     732.0|
+|"3IINFOTECH"|      4.55|
++------------+----------+
+
+//3) list the number of big price rises and falls - find all those companies whose closing price go up or down by more than 2 rupees in a day ( using spark sql - sqlcontext.sql)
+
+//register df as temptable
+NSECompaniesDF.registerTempTable("NSECompTable")
+
+//rise or fall more than 2 rupees
+val fluctuationBy2Rupees = sqlContext.sql("select code, date, open, close, abs(close-open) differeceGT2 from NSECompTable where abs(close-open) > 2")
+fluctuationBy2Rupees: org.apache.spark.sql.DataFrame = [code: string, date: string, open: double, close: double, differeceGT2: double]
+
+
+//display output
+fluctuationBy2Rupees.show()
++------------+--------+-------+------+------------------+
+|        code|    date|   open| close|      differeceGT2|
++------------+--------+-------+------+------------------+
+|   "8KMILES"|20150116| 709.95|707.05| 2.900000000000091|
+|   "8KMILES"|20150116|  709.6| 707.0|2.6000000000000227|
+|   "8KMILES"|20150116|  706.5| 708.7|2.2000000000000455|
+|   "8KMILES"|20150116| 709.65| 714.4|              4.75|
+|   "8KMILES"|20150116| 713.05| 710.0|3.0499999999999545|
+|   "8KMILES"|20150116|  710.0| 713.0|               3.0|
+|   "8KMILES"|20150116|  712.5|714.95|2.4500000000000455|
+|   "8KMILES"|20150116|  715.0| 730.0|              15.0|
+|   "8KMILES"|20150116|  732.0| 727.1| 4.899999999999977|
+|   "8KMILES"|20150116| 727.85|725.05| 2.800000000000068|
+|   "8KMILES"|20150116| 726.95| 729.0|2.0499999999999545|
+|   "8KMILES"|20150116|  727.2| 725.0|2.2000000000000455|
+|   "8KMILES"|20150116|  724.0| 717.0|               7.0|
+|   "8KMILES"|20150116|  715.8| 718.0|2.2000000000000455|
+|   "8KMILES"|20150116|  720.0| 714.0|               6.0|
+|"ABBOTINDIA"|20150618| 3844.0|3840.0|               4.0|
+|"ABBOTINDIA"|20150618| 3854.0|3845.0|               9.0|
+|"ABBOTINDIA"|20150618| 3860.0|3852.0|               8.0|
+|"ABBOTINDIA"|20141226| 3495.0|3499.0|               4.0|
+|"ABBOTINDIA"|20141226|3484.95|3470.0|14.949999999999818|
++------------+--------+-------+------+------------------+
+only showing top 20 rows
+
+
+//fluctuationBy2Rupees.saveAsTextFile("sparksqlNSE/priceRiseFalls/result")
+
+//4) compute hourly average closing price for each company
+
+val hourlyAvgClosingPrice = sqlContext.sql("select code, date,substring(time,2,2) hour,avg(close) avg_closing from NSECompTable group by code, date, substring(time,2,2)")
+hourlyAvgClosingPrice: org.apache.spark.sql.DataFrame = [code: string, date: string, hour: string, avg_closing: double]
+
+//display output
+hourlyAvgClosingPrice.show()
++------------+--------+----+------------------+                                 
+|        code|    date|hour|       avg_closing|
++------------+--------+----+------------------+
+|"3IINFOTECH"|20150706|  09| 4.365277777777775|
+|"3IINFOTECH"|20150706|  10| 4.349999999999997|
+|"ABBOTINDIA"|20150618|  12|           3860.45|
+|"ABBOTINDIA"|20150618|  13|            3852.1|
+|"ABBOTINDIA"|20150618|  14| 3850.431818181818|
+|"ABBOTINDIA"|20150618|  15|3853.3888888888887|
+|"ABBOTINDIA"|20141226|  09|          3498.775|
+|"ABBOTINDIA"|20150619|  09|         3860.4375|
+|   "8KMILES"|20150116|  09| 708.3833333333333|
+|"ABBOTINDIA"|20141226|  10| 3473.161666666666|
+|"ABBOTINDIA"|20141226|  11|3547.5807692307694|
+|"ABBOTINDIA"|20150619|  10|            3875.5|
+|"ABBOTINDIA"|20150619|  11|3877.3333333333335|
+|"AMARAJABAT"|20150407|  11|           850.556|
+|"ABBOTINDIA"|20150619|  12|3879.8250000000003|
+|"AMARAJABAT"|20150407|  12| 848.8569767441859|
+|"ABBOTINDIA"|20150619|  13|3876.2285714285713|
+|"AMARAJABAT"|20150407|  13|  850.312037037037|
+|"ABBOTINDIA"|20150619|  14|            3876.0|
+|"AMARAJABAT"|20150407|  14|  851.250892857143|
++------------+--------+----+------------------+
+only showing top 20 rows
+
+//hourlyAvgClosingPrice.saveAsTextFile("sparksqlNSE/hourlyAverageClosingPrice/result")
+
+//5)   Find the greatest Volume ( using hiveContext)
+
+// use jyutika_db from hive
+sqlContext.sql("use jyutika_db")
+res0: org.apache.spark.sql.DataFrame = [result: string]
+
+// show tables
+sqlContext.sql("show tables").show()
++---------+-----------+
+|tableName|isTemporary|
++---------+-----------+
+|   orders|      false|
++---------+-----------+
+
+
+//create table if not exists
+sqlContext.sql("create table if not exists NSECompHive (code string, date string, time string, open float, high float, low float, close float, volume int) row format delimited fields terminated by ',' lines terminated by '\n'")
+res2: org.apache.spark.sql.DataFrame = [result: string]
+
+sqlContext.sql("show tables").show()
++-----------+-----------+
+|  tableName|isTemporary|
++-----------+-----------+
+|nsecomphive|      false|
+|     orders|      false|
++-----------+-----------+
+
+//confirm if table created as per requirement
+sqlContext.sql("describe formatted NSECompHive").collect().foreach(println)
+17/08/29 02:26:06 WARN lazy.LazyStruct: Extra bytes detected at the end of the row! Ignoring similar problems.
+[# col_name            	data_type           	comment             ]
+[	 	 ]
+[code                	string              	                    ]
+[date                	string              	                    ]
+[time                	string              	                    ]
+[open                	float               	                    ]
+[high                	float               	                    ]
+[low                 	float               	                    ]
+[close               	float               	                    ]
+[volume              	int                 	                    ]
+[	 	 ]
+[# Detailed Table Information	 	 ]
+[Database:           	jyutika_db          	 ]
+[Owner:              	cloudera            	 ]
+[CreateTime:         	Tue Aug 29 02:21:57 PDT 2017	 ]
+[LastAccessTime:     	UNKNOWN             	 ]
+[Protect Mode:       	None                	 ]
+[Retention:          	0                   	 ]
+[Location:           	hdfs://quickstart.cloudera:8020/user/hive/warehouse/jyutika_db.db/nsecomphive	 ]
+[Table Type:         	MANAGED_TABLE       	 ]
+[Table Parameters:	 	 ]
+[	transient_lastDdlTime	1503998517          ]
+[	 	 ]
+[# Storage Information	 	 ]
+[SerDe Library:      	org.apache.hadoop.hive.serde2.lazy.LazySimpleSerDe	 ]
+[InputFormat:        	org.apache.hadoop.mapred.TextInputFormat	 ]
+[OutputFormat:       	org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat	 ]
+[Compressed:         	No                  	 ]
+[Num Buckets:        	-1                  	 ]
+[Bucket Columns:     	[]                  	 ]
+[Sort Columns:       	[]                  	 ]
+[Storage Desc Params:	 	 ]
+[	field.delim         	,                   ]
+[	line.delim          	\n                  ]
+[	serialization.format	,                   ]
+
+
+
+//convert original nseData file to other text file for removing first column from it, to match to hive table's columns
+val textFileForHiveTable = sc.textFile("sparksqlNSE/nseData").map(rec => rec.split(",")(1)+","+rec.split(",")(2)+","+rec.split(",")(3)+","+rec.split(",")(4)+","+rec.split(",")(5)+","+rec.split(",")(6)+","+rec.split(",")(7)+","+rec.split(",")(8))
+textFileForHiveTable: org.apache.spark.rdd.RDD[String] = MapPartitionsRDD[13] at map at <console>:27
+
+textFileForHiveTable.take(5).foreach(println)
+"3IINFOTECH",20150703,"09:16:00",4.55,4.55,4.55,4.55,835
+"3IINFOTECH",20150703,"09:17:00",4.55,4.55,4.55,4.55,390
+"3IINFOTECH",20150703,"09:18:00",4.55,4.55,4.55,4.55,1000
+"3IINFOTECH",20150703,"09:19:00",4.55,4.55,4.55,4.55,1150
+"3IINFOTECH",20150703,"09:20:00",4.55,4.55,4.55,4.55,1100
+
+textFileForHiveTable.saveAsTextFile("sparksqlNSE/textFileForHiveNSETable")
+
+sqlContext.sql("load data inpath '/user/cloudera/sparksqlNSE/textFileForHiveNSETable' into table NSECompHive")
+17/08/29 02:32:45 ERROR hdfs.KeyProviderCache: Could not find uri with key [dfs.encryption.key.provider.uri] to create a keyProvider !!
+17/08/29 02:32:45 WARN shims.HadoopShimsSecure: Unable to inherit permissions for file hdfs://quickstart.cloudera:8020/user/hive/warehouse/jyutika_db.db/nsecomphive/part-00000 from file hdfs://quickstart.cloudera:8020/user/hive/warehouse/jyutika_db.db/nsecomphive User does not belong to supergroup
+	at org.apache.hadoop.hdfs.server.namenode.FSNamesystem.setOwnerInt(FSNamesystem.java:1852)
+	at org.apache.hadoop.hdfs.server.namenode.FSNamesystem.setOwner(FSNamesystem.java:1826)
+	at org.apache.hadoop.hdfs.server.namenode.NameNodeRpcServer.setOwner(NameNodeRpcServer.java:661)
+	at org.apache.hadoop.hdfs.server.namenode.AuthorizationProviderProxyClientProtocol.setOwner(AuthorizationProviderProxyClientProtocol.java:187)
+	at org.apache.hadoop.hdfs.protocolPB.ClientNamenodeProtocolServerSideTranslatorPB.setOwner(ClientNamenodeProtocolServerSideTranslatorPB.java:465)
+	at org.apache.hadoop.hdfs.protocol.proto.ClientNamenodeProtocolProtos$ClientNamenodeProtocol$2.callBlockingMethod(ClientNamenodeProtocolProtos.java)
+	at org.apache.hadoop.ipc.ProtobufRpcEngine$Server$ProtoBufRpcInvoker.call(ProtobufRpcEngine.java:617)
+	at org.apache.hadoop.ipc.RPC$Server.call(RPC.java:1073)
+	at org.apache.hadoop.ipc.Server$Handler$1.run(Server.java:2216)
+	at org.apache.hadoop.ipc.Server$Handler$1.run(Server.java:2212)
+	at java.security.AccessController.doPrivileged(Native Method)
+	at javax.security.auth.Subject.doAs(Subject.java:415)
+	at org.apache.hadoop.security.UserGroupInformation.doAs(UserGroupInformation.java:1796)
+	at org.apache.hadoop.ipc.Server$Handler.run(Server.java:2210)
+
+res8: org.apache.spark.sql.DataFrame = [result: string]
+
+sqlContext.sql("select * from NSECompHive limit 10").show()
++------------+--------+----------+----+----+----+-----+------+
+|        code|    date|      time|open|high| low|close|volume|
++------------+--------+----------+----+----+----+-----+------+
+|"3IINFOTECH"|20150703|"09:16:00"|4.55|4.55|4.55| 4.55|   835|
+|"3IINFOTECH"|20150703|"09:17:00"|4.55|4.55|4.55| 4.55|   390|
+|"3IINFOTECH"|20150703|"09:18:00"|4.55|4.55|4.55| 4.55|  1000|
+|"3IINFOTECH"|20150703|"09:19:00"|4.55|4.55|4.55| 4.55|  1150|
+|"3IINFOTECH"|20150703|"09:20:00"|4.55|4.55|4.55| 4.55|  1100|
+|"3IINFOTECH"|20150703|"09:21:00"|4.55|4.55|4.55| 4.55|  4500|
+|"3IINFOTECH"|20150703|"09:22:00"|4.55|4.55|4.55| 4.55|  1500|
+|"3IINFOTECH"|20150703|"09:23:00"|4.55|4.55|4.55| 4.55|  5540|
+|"3IINFOTECH"|20150703|"09:24:00"|4.55|4.55|4.55| 4.55|  1500|
+|"3IINFOTECH"|20150703|"09:26:00"|4.55|4.55|4.55| 4.55|   200|
++------------+--------+----------+----+----+----+-----+------+
+
+
+val greatestVolume = sqlContext.sql("select code , max(volume) maxVolume from NSECompHive group by code order by maxVolume")
+greatestVolume: org.apache.spark.sql.DataFrame = [code: string, maxVolume: int]
+
+greatestVolume.show()
++------------+---------+                                                        
+|        code|maxVolume|
++------------+---------+
+|"ABBOTINDIA"|      462|
+|"AMARAJABAT"|     1922|
+|   "8KMILES"|    10745|
+|"ADANIPORTS"|   139074|
+|"3IINFOTECH"|  2364975|
++------------+---------+
+
+//greatestVolume.saveAsTextFile("sparksqlNSE/greatestVolume/result")
+
+//6) save and read back original dataframe as parquet file
+
+NSECompaniesDF.write.format("parquet").save("sparksqlNSE/NSEasParquet")
+SLF4J: Class path contains multiple SLF4J bindings.
+SLF4J: Found binding in [jar:file:/usr/lib/parquet/lib/parquet-pig-bundle-1.5.0-cdh5.10.0.jar!/shaded/parquet/org/slf4j/impl/StaticLoggerBinder.class]
+SLF4J: Found binding in [jar:file:/usr/lib/parquet/lib/parquet-format-2.1.0-cdh5.10.0.jar!/shaded/parquet/org/slf4j/impl/StaticLoggerBinder.class]
+SLF4J: Found binding in [jar:file:/usr/lib/parquet/lib/parquet-hadoop-bundle-1.5.0-cdh5.10.0.jar!/shaded/parquet/org/slf4j/impl/StaticLoggerBinder.class]
+SLF4J: Found binding in [jar:file:/usr/lib/hive/lib/hive-jdbc-1.1.0-cdh5.10.0-standalone.jar!/shaded/parquet/org/slf4j/impl/StaticLoggerBinder.class]
+SLF4J: Found binding in [jar:file:/usr/lib/hive/lib/hive-exec-1.1.0-cdh5.10.0.jar!/shaded/parquet/org/slf4j/impl/StaticLoggerBinder.class]
+SLF4J: See http://www.slf4j.org/codes.html#multiple_bindings for an explanation.
+SLF4J: Actual binding is of type [shaded.parquet.org.slf4j.helpers.NOPLoggerFactory]
+
+val newDF = sqlContext.read.parquet("sparksqlNSE/NSEasParquet")
+newDF: org.apache.spark.sql.DataFrame = [code: string, date: string, time: string, open: double, high: double, low: double, close: double, volume: int]
+
+newDF.show()
+17/08/29 02:40:27 WARN parquet.CorruptStatistics: Ignoring statistics because created_by is null or empty! See PARQUET-251 and PARQUET-297
++------------+--------+----------+----+----+----+-----+------+
+|        code|    date|      time|open|high| low|close|volume|
++------------+--------+----------+----+----+----+-----+------+
+|"3IINFOTECH"|20150703|"09:16:00"|4.55|4.55|4.55| 4.55|   835|
+|"3IINFOTECH"|20150703|"09:17:00"|4.55|4.55|4.55| 4.55|   390|
+|"3IINFOTECH"|20150703|"09:18:00"|4.55|4.55|4.55| 4.55|  1000|
+|"3IINFOTECH"|20150703|"09:19:00"|4.55|4.55|4.55| 4.55|  1150|
+|"3IINFOTECH"|20150703|"09:20:00"|4.55|4.55|4.55| 4.55|  1100|
+|"3IINFOTECH"|20150703|"09:21:00"|4.55|4.55|4.55| 4.55|  4500|
+|"3IINFOTECH"|20150703|"09:22:00"|4.55|4.55|4.55| 4.55|  1500|
+|"3IINFOTECH"|20150703|"09:23:00"|4.55|4.55|4.55| 4.55|  5540|
+|"3IINFOTECH"|20150703|"09:24:00"|4.55|4.55|4.55| 4.55|  1500|
+|"3IINFOTECH"|20150703|"09:26:00"|4.55|4.55|4.55| 4.55|   200|
+|"3IINFOTECH"|20150703|"09:27:00"|4.55|4.55|4.55| 4.55|   900|
+|"3IINFOTECH"|20150703|"09:28:00"|4.55|4.55|4.55| 4.55|  5000|
+|"3IINFOTECH"|20150703|"09:29:00"|4.55|4.55|4.55| 4.55|   475|
+|"3IINFOTECH"|20150703|"09:30:00"|4.55|4.55|4.55| 4.55|  3700|
+|"3IINFOTECH"|20150703|"09:31:00"|4.55|4.55|4.55| 4.55|  5000|
+|"3IINFOTECH"|20150703|"09:32:00"|4.55|4.55|4.55| 4.55|   500|
+|"3IINFOTECH"|20150703|"09:33:00"|4.55|4.55|4.55| 4.55|   350|
+|"3IINFOTECH"|20150703|"09:34:00"|4.55|4.55|4.55| 4.55|   200|
+|"3IINFOTECH"|20150703|"09:35:00"|4.55|4.55|4.55| 4.55|   900|
+|"3IINFOTECH"|20150703|"09:36:00"|4.55|4.55|4.55| 4.55|   500|
++------------+--------+----------+----+----+----+-----+------+
+only showing top 20 rows
