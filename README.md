@@ -7,13 +7,19 @@ Project Description : Stock Market Analysis – NSE India
 Dataset Resource : https://www.kaggle.com/ramamet4/nse-company-stocks
 
 Special operation :
+
               a. Compute the average closing price per day per company
-              b. List the companies with highest closing prices
-              c. List the number of big price rises and falls
-              d. Compute hourly average closing price for each company
-              e. Find the greatest Volume
-              f. Save and read back original dataframe as parquet file
               
+              b. List the companies with highest closing prices
+              
+              c. List the number of big price rises and falls
+              
+              d. Compute hourly average closing price for each company
+              
+              e. Find the greatest Volume
+              
+              f. Save and read back original dataframe as parquet file
+                            
               
 Goal : Doing the various operations on the stock market yearly data
 
